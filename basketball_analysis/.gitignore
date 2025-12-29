@@ -14,3 +14,8 @@ stubs/
 *.avi
 .DS_Store
 *.log
+
+# Model files (too large for GitHub)
+*.pt
+models/*.pt
+!models/.gitkeep
