@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Courtsight - Basketball Live Score Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Courtsight</h1>
+            <p class="subtitle">Basketball video analysis with AI-powered insights</p>
+        </header>
+
+        <div class="main-content">
+            <div class="video-section">
+                <div class="video-container" id="video-container">
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-tertiary); font-size: 14px;">
+                        Video preview will appear here after analysis
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls-section">
+                <div class="analysis-panel">
+                    <h2>Video Analysis</h2>
+                    <p class="info-text">Enter a YouTube URL to analyze basketball video for passes, interceptions, and other analytics</p>
+                    
+                    <div class="input-group" style="margin-bottom: 16px;">
+                        <input 
+                            type="text" 
+                            id="youtube-url" 
+                            placeholder="https://www.youtube.com/watch?v=..." 
+                            class="url-input"
+                            style="width: 100%; padding: 12px 16px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 13px; margin-bottom: 12px;"
+                        />
+                    </div>
+                    
+                    <div class="button-group">
+                        <button id="analyze-btn" class="btn btn-success">Analyze Video</button>
+                    </div>
+
+                    <div class="analysis-status" id="analysis-status" style="display: none;">
+                        <div class="status-item">
+                            <span class="status-label">Status:</span>
+                            <span class="status-value" id="analysis-status-value">-</span>
+                        </div>
+                        <div class="status-item" id="analysis-output" style="display: none;">
+                            <span class="status-label">Output:</span>
+                            <span class="status-value" id="analysis-output-value">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h3>How it works</h3>
+            <ul>
+                <li><strong>YouTube URL:</strong> Paste a YouTube video link to analyze basketball gameplay</li>
+                <li><strong>Video Download:</strong> The system automatically downloads the video from YouTube</li>
+                <li><strong>Analysis:</strong> Full analysis includes player tracking, passes, interceptions, and tactical views</li>
+                <li><strong>Results:</strong> Analyzed video with all annotations will be saved to the output folder</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let analysisCheckInterval;
+        let currentJobId = null;
+
+        // Analyze video
+        document.getElementById('analyze-btn').addEventListener('click', async () => {
+            const urlInput = document.getElementById('youtube-url');
+            const youtubeUrl = urlInput.value.trim();
+            
+            if (!youtubeUrl) {
+                alert('Please enter a YouTube URL');
+                return;
+            }
+            
+            console.log('Starting analysis for URL:', youtubeUrl);
+            
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({video_url: youtubeUrl})
+                });
+                
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Error response:', errorData);
+                    alert('Error: ' + (errorData.message || 'Failed to start analysis'));
+                    return;
+                }
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (data.status === 'success') {
+                    currentJobId = data.job_id;
+                    console.log('Analysis job started with ID:', currentJobId);
+                    document.getElementById('analyze-btn').disabled = true;
+                    urlInput.disabled = true;
+                    document.getElementById('analysis-status').style.display = 'block';
+                    document.getElementById('analysis-status-value').textContent = 'Starting...';
+                    
+                    // Start checking analysis status
+                    startAnalysisStatusCheck();
+                } else {
+                    console.error('Analysis failed:', data);
+                    alert('Error: ' + (data.message || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Exception during analysis request:', error);
+                alert('Error starting analysis: ' + error.message);
+            }
+        });
+
+        // Allow Enter key to submit
+        document.getElementById('youtube-url').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('analyze-btn').click();
+            }
+        });
+
+        // Check analysis status
+        function startAnalysisStatusCheck() {
+            console.log('Starting status check for job:', currentJobId);
+            analysisCheckInterval = setInterval(async () => {
+                if (!currentJobId) {
+                    console.log('No current job ID, stopping status check');
+                    clearInterval(analysisCheckInterval);
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/analysis_status/${currentJobId}`);
+                    
+                    if (!response.ok) {
+                        console.error('Status check failed:', response.status);
+                        return;
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Status update:', data);
+                    
+                    if (data.status === 'completed') {
+                        console.log('Analysis completed!');
+                        document.getElementById('analysis-status-value').textContent = 'Completed';
+                        document.getElementById('analysis-output').style.display = 'block';
+                        document.getElementById('analysis-output-value').textContent = data.output_path || 'Analysis complete';
+                        document.getElementById('analyze-btn').disabled = false;
+                        document.getElementById('youtube-url').disabled = false;
+                        currentJobId = null;
+                        clearInterval(analysisCheckInterval);
+                        alert('Analysis completed! Output: ' + (data.output_path || 'Check output folder'));
+                    } else if (data.status === 'failed') {
+                        console.error('Analysis failed:', data.error);
+                        document.getElementById('analysis-status-value').textContent = 'Failed';
+                        document.getElementById('analysis-output').style.display = 'block';
+                        const errorMsg = data.error || data.traceback || 'Analysis failed';
+                        document.getElementById('analysis-output-value').textContent = errorMsg.substring(0, 200);
+                        document.getElementById('analyze-btn').disabled = false;
+                        document.getElementById('youtube-url').disabled = false;
+                        currentJobId = null;
+                        clearInterval(analysisCheckInterval);
+                        alert('Analysis failed: ' + errorMsg.substring(0, 100));
+                    } else {
+                        // Update status message
+                        const statusText = data.message || data.status || 'Processing...';
+                        document.getElementById('analysis-status-value').textContent = statusText.charAt(0).toUpperCase() + statusText.slice(1);
+                    }
+                } catch (error) {
+                    console.error('Error checking analysis status:', error);
+                }
+            }, 2000); // Check every 2 seconds
+        }
+    </script>
+</body>
+</html>
+
