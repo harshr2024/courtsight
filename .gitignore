@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+*.pkl
+*.log
+
+# Python packages
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Model files (too large for GitHub)
+*.pt
+models/*.pt
+
+# Video files
+*.mp4
+*.avi
+*.mov
+output_videos/
+
+# Node/React
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Cache
+.cache/
+.pytest_cache/
+.coverage
+
+# Stubs
+stubs/*.pkl
+!stubs/.gitkeep
+

@@ -16,6 +16,7 @@ import time
 import json
 import re
 from flask import Flask, render_template, Response, jsonify, request
+from flask_cors import CORS
 from live_score_detector import LiveScoreDetector
 import subprocess
 import uuid
@@ -25,6 +26,8 @@ except ImportError:
     yt_dlp = None
 
 app = Flask(__name__)
+# Enable CORS for React frontend
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Global detector instance
 detector = None
@@ -196,13 +199,49 @@ def is_youtube_url(url):
     youtube_pattern = r'(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})'
     return bool(re.match(youtube_pattern, url))
 
-def download_youtube_video(url, output_path):
-    """Download YouTube video using yt-dlp."""
+def get_video_id(url):
+    """Extract video ID from YouTube URL for caching."""
+    youtube_pattern = r'(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})'
+    match = re.match(youtube_pattern, url)
+    return match.group(1) if match else None
+
+def download_youtube_video(url, output_path, use_cache=True):
+    """
+    Download YouTube video using yt-dlp with caching support.
+    
+    Args:
+        url: YouTube URL
+        output_path: Base path for output file
+        use_cache: If True, check for existing cached file first
+    
+    Returns:
+        Path to video file (cached or newly downloaded)
+    """
     if yt_dlp is None:
         raise ImportError("yt-dlp is not installed. Please install it with: pip install yt-dlp")
     
+    # Create cache directory
+    cache_dir = "output_videos/cache"
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # Get video ID for caching
+    video_id = get_video_id(url)
+    cached_file = None
+    
+    # Check cache if enabled
+    if use_cache and video_id:
+        for ext in ['.mp4', '.webm', '.mkv']:
+            cached_path = os.path.join(cache_dir, f"{video_id}{ext}")
+            if os.path.exists(cached_path):
+                print(f"Using cached video: {cached_path}")
+                return cached_path
+    
     # Remove extension from output_path as yt-dlp will add it
     base_path = output_path.rsplit('.', 1)[0] if '.' in output_path else output_path
+    
+    # If caching, use cache directory with video ID
+    if use_cache and video_id:
+        base_path = os.path.join(cache_dir, video_id)
     
     ydl_opts = {
         'format': 'best[height<=720]/best',  # Download best quality up to 720p, fallback to best
@@ -211,6 +250,7 @@ def download_youtube_video(url, output_path):
         'no_warnings': False,
     }
     
+    print(f"Downloading video from YouTube...")
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
     
@@ -218,6 +258,7 @@ def download_youtube_video(url, output_path):
     for ext in ['.mp4', '.webm', '.mkv', '.m4a']:
         file_path = base_path + ext
         if os.path.exists(file_path):
+            print(f"Download complete: {file_path}")
             return file_path
     
     # If no file found, return the base path (might need manual check)
@@ -278,8 +319,9 @@ def analyze_video():
                         'started_at': time.time()
                     }
                 try:
-                    video_path = download_youtube_video(video_input, download_path)
-                    print(f"[{job_id}] Download complete: {video_path}")
+                    # Use caching - will reuse if video was downloaded before
+                    video_path = download_youtube_video(video_input, download_path, use_cache=True)
+                    print(f"[{job_id}] Video ready: {video_path}")
                 except Exception as e:
                     print(f"[{job_id}] Download failed: {e}")
                     analysis_jobs[job_id] = {
@@ -501,7 +543,65 @@ def get_analysis_status(job_id):
     if job_id not in analysis_jobs:
         return jsonify({'status': 'error', 'message': 'Job not found'}), 404
     
-    return jsonify(analysis_jobs[job_id])
+    job_data = analysis_jobs[job_id].copy()
+    
+    # If completed and has output_path, convert to URL
+    if job_data.get('status') == 'completed' and job_data.get('output_path'):
+        output_path = job_data['output_path']
+        # Normalize path (handle both relative and absolute paths)
+        output_path = os.path.normpath(output_path)
+        
+        # Make path relative to output_videos for URL
+        if 'output_videos' in output_path:
+            rel_path = output_path.split('output_videos')[-1].lstrip('/').lstrip('\\')
+            job_data['video_url'] = f'/video/{rel_path}'
+            print(f"[{job_id}] Generated video URL: {job_data['video_url']} from path: {output_path}")
+        else:
+            # If path doesn't contain 'output_videos', assume it's already relative
+            job_data['video_url'] = f'/video/{os.path.basename(output_path)}'
+            print(f"[{job_id}] Generated video URL (basename): {job_data['video_url']} from path: {output_path}")
+    
+    return jsonify(job_data)
+
+@app.route('/video/<path:filename>')
+def serve_video(filename):
+    """Serve video files from output_videos directory."""
+    try:
+        # Security: Prevent directory traversal
+        if '..' in filename or filename.startswith('/'):
+            print(f"Invalid video path requested: {filename}")
+            return jsonify({'error': 'Invalid path'}), 403
+        
+        video_path = os.path.join('output_videos', filename)
+        video_path = os.path.normpath(video_path)
+        
+        # Get absolute paths for comparison
+        output_videos_abs = os.path.abspath('output_videos')
+        video_path_abs = os.path.abspath(video_path)
+        
+        # Ensure the path is still within output_videos
+        try:
+            common = os.path.commonpath([output_videos_abs, video_path_abs])
+            if common != output_videos_abs:
+                print(f"Path traversal detected: {filename} -> {video_path_abs}")
+                return jsonify({'error': 'Invalid path'}), 403
+        except ValueError:
+            # Paths are on different drives (Windows) or invalid
+            print(f"Invalid path comparison: {filename}")
+            return jsonify({'error': 'Invalid path'}), 403
+        
+        if not os.path.exists(video_path):
+            print(f"Video file not found: {video_path} (absolute: {video_path_abs})")
+            return jsonify({'error': 'Video not found'}), 404
+        
+        print(f"Serving video: {filename} from {video_path}")
+        from flask import send_from_directory
+        return send_from_directory('output_videos', filename, mimetype='video/mp4')
+    except Exception as e:
+        print(f"Error serving video {filename}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/reset_score', methods=['POST'])
 def reset_score():
