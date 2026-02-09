@@ -72,9 +72,16 @@ class BallTracker:
             max_confidence = 0
             
             for frame_detection in detection_supervision:
-                bbox = frame_detection[0].tolist()
-                cls_id = frame_detection[3]
-                confidence = frame_detection[2]
+                # Check if frame_detection is valid and has elements
+                if frame_detection is None or len(frame_detection) < 4:
+                    continue
+                
+                try:
+                    bbox = frame_detection[0].tolist()
+                    cls_id = frame_detection[3]
+                    confidence = frame_detection[2]
+                except (IndexError, AttributeError) as e:
+                    continue
                 
                 if cls_id == cls_names_inv['Ball']:
                     if max_confidence<confidence:

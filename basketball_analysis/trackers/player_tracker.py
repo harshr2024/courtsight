@@ -92,9 +92,16 @@ class PlayerTracker:
             tracks.append({})
 
             for frame_detection in detection_with_tracks:
-                bbox = frame_detection[0].tolist()
-                cls_id = frame_detection[3]
-                track_id = frame_detection[4]
+                # Check if frame_detection is valid and has elements
+                if frame_detection is None or len(frame_detection) < 5:
+                    continue
+                
+                try:
+                    bbox = frame_detection[0].tolist()
+                    cls_id = frame_detection[3]
+                    track_id = frame_detection[4]
+                except (IndexError, AttributeError) as e:
+                    continue
 
                 if cls_id == cls_names_inv['Player']:
                     tracks[frame_num][track_id] = {"bbox":bbox}

@@ -16,7 +16,11 @@
         <div class="main-content">
             <div class="video-section">
                 <div class="video-container" id="video-container">
-                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-tertiary); font-size: 14px;">
+                    <video id="output-video" controls preload="auto" style="width: 100%; height: 100%; display: none; background: #000; object-fit: contain;">
+                        <source id="video-source" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                    <div id="video-placeholder" style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-tertiary); font-size: 14px;">
                         Video preview will appear here after analysis
                     </div>
                 </div>
@@ -158,7 +162,65 @@
                         document.getElementById('youtube-url').disabled = false;
                         currentJobId = null;
                         clearInterval(analysisCheckInterval);
-                        alert('Analysis completed! Output: ' + (data.output_path || 'Check output folder'));
+                        
+                        // Display the output video
+                        if (data.video_url) {
+                            console.log('Setting video source to:', data.video_url);
+                            const video = document.getElementById('output-video');
+                            const videoSource = document.getElementById('video-source');
+                            const placeholder = document.getElementById('video-placeholder');
+                            
+                            // Add error handlers
+                            video.onerror = function(e) {
+                                console.error('Video loading error:', e);
+                                console.error('Video error code:', video.error);
+                                console.error('Video src:', video.src);
+                                console.error('Video currentSrc:', video.currentSrc);
+                                if (video.error) {
+                                    console.error('Video error message:', video.error.message);
+                                    console.error('Video error code:', video.error.code);
+                                }
+                                alert('Error loading video. The video file may be in an unsupported format. Please check the browser console for details.');
+                            };
+                            
+                            video.onloadeddata = function() {
+                                console.log('Video loaded successfully');
+                                console.log('Video duration:', video.duration);
+                                console.log('Video dimensions:', video.videoWidth + 'x' + video.videoHeight);
+                            };
+                            
+                            video.oncanplay = function() {
+                                console.log('Video can start playing');
+                            };
+                            
+                            video.onloadstart = function() {
+                                console.log('Video loading started');
+                            };
+                            
+                            video.onstalled = function() {
+                                console.warn('Video loading stalled');
+                            };
+                            
+                            // Set source on source element and video element
+                            console.log('Setting video source:', data.video_url);
+                            videoSource.src = data.video_url;
+                            video.src = data.video_url;
+                            video.style.display = 'block';
+                            placeholder.style.display = 'none';
+                            
+                            // Force reload
+                            video.load();
+                            
+                            // Try to play (some browsers require user interaction first)
+                            video.play().catch(function(error) {
+                                console.log('Auto-play prevented (normal):', error.message);
+                                // This is normal - browsers often prevent auto-play
+                            });
+                        } else {
+                            console.warn('No video_url in completed status data:', data);
+                        }
+                        
+                        alert('Analysis completed! Video is now displayed above.');
                     } else if (data.status === 'failed') {
                         console.error('Analysis failed:', data.error);
                         document.getElementById('analysis-status-value').textContent = 'Failed';

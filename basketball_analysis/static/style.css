@@ -94,6 +94,11 @@ header h1 {
     overflow: hidden;
     border: 1px solid var(--border-color);
     aspect-ratio: 16 / 9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    aspect-ratio: 16 / 9;
 }
 
 #video-stream {

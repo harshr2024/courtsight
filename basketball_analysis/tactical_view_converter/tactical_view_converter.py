@@ -67,9 +67,21 @@ class TacticalViewConverter:
         keypoints_list = deepcopy(keypoints_list)
 
         for frame_idx, frame_keypoints in enumerate(keypoints_list):
-            frame_keypoints = frame_keypoints.xy.tolist()[0]
+            # Check if keypoints are valid
+            if frame_keypoints is None or not hasattr(frame_keypoints, 'xy'):
+                continue
+            
+            try:
+                keypoint_list = frame_keypoints.xy.tolist()
+                if not keypoint_list or len(keypoint_list) == 0:
+                    continue
+                frame_keypoints = keypoint_list[0]
+            except (IndexError, AttributeError) as e:
+                continue
             
             # Get indices of detected keypoints (not (0, 0))
+            if frame_keypoints is None or len(frame_keypoints) == 0:
+                continue
             detected_indices = [i for i, kp in enumerate(frame_keypoints) if kp[0] >0 and kp[1]>0]
             
             # Need at least 3 detected keypoints to validate proportions
@@ -187,6 +199,10 @@ class TacticalViewConverter:
                     player_position = np.array([get_foot_position(bbox)])
                     # Transform to tactical view coordinates
                     tactical_position = homography.transform_points(player_position)
+
+                    # Check if tactical_position is valid and has at least one point
+                    if tactical_position is None or len(tactical_position) == 0 or len(tactical_position[0]) < 2:
+                        continue
 
                     # If tactical position is not in the tactical view, skip
                     if tactical_position[0][0] < 0 or tactical_position[0][0] > self.width or tactical_position[0][1] < 0 or tactical_position[0][1] > self.height:

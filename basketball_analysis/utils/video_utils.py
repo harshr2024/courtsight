@@ -91,14 +91,34 @@ def save_video(output_video_frames, output_video_path, fps=24):
     
     height, width = output_video_frames[0].shape[:2]
     
-    # Try H.264 first (more efficient)
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+    # Try H.264 codecs first (browser-compatible)
+    # Try different H.264 fourcc codes
+    codecs_to_try = [
+        ('avc1', 'H.264/AVC1'),  # H.264 in MP4 container (browser-compatible)
+        ('H264', 'H.264'),       # H.264 alternative
+        ('mp4v', 'MPEG-4'),      # MPEG-4 Part 2 (fallback, less browser support)
+        ('XVID', 'XVID'),        # XVID codec (last resort)
+    ]
     
-    if not out.isOpened():
-        # Fallback to XVID
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+    out = None
+    used_codec = None
+    for fourcc_str, codec_name in codecs_to_try:
+        try:
+            fourcc = cv2.VideoWriter_fourcc(*fourcc_str)
+            out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+            if out.isOpened():
+                used_codec = codec_name
+                print(f"Using codec: {codec_name} ({fourcc_str})")
+                break
+        except Exception as e:
+            print(f"Failed to initialize codec {fourcc_str}: {e}")
+            if out is not None:
+                out.release()
+            out = None
+            continue
+    
+    if out is None or not out.isOpened():
+        raise RuntimeError("Could not initialize video writer with any codec")
     
     for frame in output_video_frames:
         out.write(frame)
