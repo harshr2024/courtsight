@@ -12,19 +12,18 @@ class PlayerTracker:
     This class combines YOLO object detection with ByteTrack tracking to maintain consistent
     player identities across frames while processing detections in batches.
     """
-    def __init__(self, model_path):
+    def __init__(self, model_path, device='cpu'):
         """
         Initialize the PlayerTracker with YOLO model and ByteTrack tracker.
 
         Args:
             model_path (str): Path to the YOLO model weights.
         """
-        # Force CPU if CUDA is not available
-        device = 'cpu'  # Always use CPU to avoid CUDA errors
+        self.device = device
         self.model = YOLO(model_path)
-        # Set model to CPU explicitly
+        # Set model to selected device explicitly
         if hasattr(self.model, 'to'):
-            self.model.to(device)
+            self.model.to(self.device)
         self.tracker = sv.ByteTrack()
 
     def detect_frames(self, frames):
@@ -47,12 +46,11 @@ class PlayerTracker:
             if batch_num % 10 == 0 or batch_num == total_batches:
                 print(f"  Processing batch {batch_num}/{total_batches}...")
             
-            # Always use CPU to avoid CUDA errors
             detections_batch = self.model.predict(
                 frames[i:i+batch_size],
                 conf=0.5,
                 verbose=False,  # Reduce output
-                device='cpu'  # Force CPU
+                device=self.device
             )
             detections += detections_batch
         return detections

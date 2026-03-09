@@ -15,11 +15,11 @@ class BallTracker:
     This class provides methods to detect the ball in video frames, process detections
     in batches, and refine tracking results through filtering and interpolation.
     """
-    def __init__(self, model_path):
+    def __init__(self, model_path, device='cpu'):
+        self.device = device
         self.model = YOLO(model_path)
-        # Force CPU to avoid CUDA errors
         if hasattr(self.model, 'to'):
-            self.model.to('cpu') 
+            self.model.to(self.device)
 
     def detect_frames(self, frames):
         """
@@ -33,9 +33,13 @@ class BallTracker:
         """
         batch_size=20 
         detections = [] 
-        # Always use CPU to avoid CUDA errors
         for i in range(0,len(frames),batch_size):
-            detections_batch = self.model.predict(frames[i:i+batch_size], conf=0.5, device='cpu', verbose=False)
+            detections_batch = self.model.predict(
+                frames[i:i+batch_size],
+                conf=0.5,
+                device=self.device,
+                verbose=False
+            )
             detections += detections_batch
         return detections
 

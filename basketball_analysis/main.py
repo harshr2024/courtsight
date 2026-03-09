@@ -1,7 +1,9 @@
 import os
 import argparse
-# Force CPU mode to avoid CUDA errors
-os.environ['CUDA_VISIBLE_DEVICES'] = ''  # Disable CUDA
+import torch
+# Allow GPU when available unless explicitly forced to CPU.
+if os.environ.get('ARION_FORCE_CPU', '1').lower() in ('1', 'true', 'yes'):
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''  # Disable CUDA
 from utils import read_video, save_video
 from trackers import PlayerTracker, BallTracker
 from team_assigner import TeamAssigner
@@ -45,6 +47,19 @@ def parse_args():
 
 def main():
     args = parse_args()
+    force_cpu = os.environ.get('ARION_FORCE_CPU', '1').lower() in ('1', 'true', 'yes')
+    if force_cpu:
+        device = 'cpu'
+    elif torch.cuda.is_available():
+        device = 'cuda'
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        device = 'mps'
+    else:
+        device = 'cpu'
+
+    player_model_path = os.environ.get('ARION_PLAYER_MODEL', 'models/player_detector.pt')
+    ball_model_path = os.environ.get('ARION_BALL_MODEL', 'models/ball_detector_model.pt')
+    court_model_path = os.environ.get('ARION_COURT_MODEL', 'models/court_keypoint_detector.pt')
     
     try:
         print(f"Starting analysis with optimizations:")
@@ -53,6 +68,10 @@ def main():
             print(f"  Target width: {args.target_width}px")
         if args.max_frames:
             print(f"  Max frames: {args.max_frames}")
+        print(f"  Device: {device}")
+        print(f"  Player model: {player_model_path}")
+        print(f"  Ball model: {ball_model_path}")
+        print(f"  Court model: {court_model_path}")
         
         # Read Video with optimizations
         print("Loading video frames...")
@@ -79,7 +98,7 @@ def main():
     print("Initializing trackers...")
     try:
         print("  Loading player detector...")
-        player_tracker = PlayerTracker("models/player_detector.pt")
+        player_tracker = PlayerTracker(player_model_path, device=device)
         print("  ✓ Player detector loaded")
     except Exception as e:
         print(f"  ✗ Error loading player detector: {e}")
@@ -87,7 +106,7 @@ def main():
     
     try:
         print("  Loading ball detector...")
-        ball_tracker = BallTracker("models/ball_detector_model.pt")
+        ball_tracker = BallTracker(ball_model_path, device=device)
         print("  ✓ Ball detector loaded")
     except Exception as e:
         print(f"  ✗ Error loading ball detector: {e}")
@@ -96,7 +115,7 @@ def main():
     ## Initialize Keypoint Detector
     try:
         print("  Loading court keypoint detector...")
-        court_keypoint_detector = CourtKeypointDetector("models/court_keypoint_detector.pt")
+        court_keypoint_detector = CourtKeypointDetector(court_model_path)
         print("  ✓ Court keypoint detector loaded")
     except Exception as e:
         print(f"  ✗ Error loading court keypoint detector: {e}")

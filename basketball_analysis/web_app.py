@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Courtsight - Basketball Analysis Web Application
+Arion AI - Basketball Analysis Web Application
 
 This Flask web application provides:
 - Live video streaming with real-time score detection
@@ -271,6 +271,9 @@ def analyze_video():
     
     data = request.get_json() or {}
     video_input = data.get('video_url') or data.get('video_path') or recording_path
+    frame_skip = int(data.get('frame_skip', os.environ.get('ARION_FRAME_SKIP', 2)))
+    target_width = int(data.get('target_width', os.environ.get('ARION_TARGET_WIDTH', 1280)))
+    use_gpu = str(data.get('use_gpu', os.environ.get('ARION_USE_GPU', 'false'))).lower() in ('1', 'true', 'yes')
     
     print(f"Received analyze request: {data}")
     
@@ -384,21 +387,24 @@ def analyze_video():
                 }
                 return
             
-            # Set environment to force CPU mode
+            # Set environment to control CPU/GPU usage
             env = os.environ.copy()
-            env['CUDA_VISIBLE_DEVICES'] = ''  # Disable CUDA
+            env['ARION_FORCE_CPU'] = '0' if use_gpu else '1'
+            if not use_gpu:
+                env['CUDA_VISIBLE_DEVICES'] = ''  # Disable CUDA
             
             cmd = [
                 'python3', analyze_script,
                 video_path,
                 '--output_video', output_path,
                 '--stub_path', 'stubs/',
-                '--frame_skip', '2',
-                '--target_width', '1280'
+                '--frame_skip', str(frame_skip),
+                '--target_width', str(target_width)
             ]
             
             print(f"[{job_id}] Running command: {' '.join(cmd)}")
             print(f"[{job_id}] Working directory: {script_dir}")
+            print(f"[{job_id}] Analysis settings: frame_skip={frame_skip}, target_width={target_width}, use_gpu={use_gpu}")
             print(f"[{job_id}] Analysis will output progress messages - this may take 30-60 minutes for a 20-minute video on CPU")
             
             # Use Popen to stream output and update status
@@ -625,7 +631,7 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
     debug = os.environ.get('FLASK_ENV') != 'production'
     
-    print("Starting Courtsight Web Application...")
+    print("Starting Arion AI Web Application...")
     print(f"Open your browser and navigate to http://localhost:{port}")
     app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
 

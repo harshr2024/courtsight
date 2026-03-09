@@ -7,8 +7,9 @@ It processes the video with all the original analysis features (player tracking,
 """
 
 import os
-# Force CPU mode to avoid CUDA errors - must be set before importing torch/ultralytics
-os.environ['CUDA_VISIBLE_DEVICES'] = ''  # Disable CUDA
+# Allow GPU when available unless explicitly forced to CPU.
+if os.environ.get('ARION_FORCE_CPU', '1').lower() in ('1', 'true', 'yes'):
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''  # Disable CUDA
 import argparse
 import sys
 from main import main as run_full_analysis
