@@ -55,9 +55,18 @@ Pexels marks the clip as free to use under its
 standalone redistribution, this repository links to the source instead of
 bundling the file.
 
-1. Open the Pexels clip page and select **Free download**.
-2. Save the downloaded MP4 as
-   `basketball_analysis/input_videos/pexels-basketball-31955038.mp4`.
+1. Open the Pexels clip page and select **Free download**, or download the
+   same asset directly from the repository root:
+
+   ```bash
+   curl -L --fail \
+     https://www.pexels.com/download/video/31955038/ \
+     -o basketball_analysis/input_videos/pexels-basketball-31955038.mp4
+   ```
+
+2. Verify the downloaded MP4. The rendition tested on September 29, 2026 was
+   49,437,624 bytes with SHA-256
+   `e9fe2cebfa994a52ca922a258cb2330f6038d0d633122a6ed4e23074efba4a44`.
 3. Build and start the UI using the commands below, open
    `http://localhost:5001`, and upload that file; or run:
 
@@ -70,8 +79,18 @@ bundling the file.
      --device cpu
    ```
 
-The Pexels clip is a setup example, not the clip used for the timing measurement
-below, and its detections have not been benchmarked.
+The Pexels clip is a setup example, not the unavailable clip used for the older
+development reference measurement later in this README. Its detections have not
+been benchmarked.
+
+A final CPU smoke test used the first 2.000 seconds of that download, resized to
+960×540 before upload (48 input frames at 24 FPS). The UI sampled every other
+frame and produced 24 frames at 12 FPS, 960×540, and 2.000 seconds. With no
+matching cache present, upload through completed processing took **45.87
+seconds**. A subsequent command-line run with the same input and settings reused
+the generated detections and took **13.60 seconds**. These timings verify the
+pipeline and cache behavior on one machine; they are not detection-accuracy or
+general performance benchmarks.
 
 Verify installed assets:
 
