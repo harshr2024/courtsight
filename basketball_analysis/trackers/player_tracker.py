@@ -12,19 +12,18 @@ class PlayerTracker:
     This class combines YOLO object detection with ByteTrack tracking to maintain consistent
     player identities across frames while processing detections in batches.
     """
-    def __init__(self, model_path):
+    def __init__(self, model_path, device='cpu'):
         """
         Initialize the PlayerTracker with YOLO model and ByteTrack tracker.
 
         Args:
             model_path (str): Path to the YOLO model weights.
         """
-        # Force CPU if CUDA is not available
-        device = 'cpu'  # Always use CPU to avoid CUDA errors
+        self.device = device
         self.model = YOLO(model_path)
-        # Set model to CPU explicitly
+        # Set model to selected device explicitly
         if hasattr(self.model, 'to'):
-            self.model.to(device)
+            self.model.to(self.device)
         self.tracker = sv.ByteTrack()
 
     def detect_frames(self, frames):
@@ -47,17 +46,16 @@ class PlayerTracker:
             if batch_num % 10 == 0 or batch_num == total_batches:
                 print(f"  Processing batch {batch_num}/{total_batches}...")
             
-            # Always use CPU to avoid CUDA errors
             detections_batch = self.model.predict(
                 frames[i:i+batch_size],
                 conf=0.5,
                 verbose=False,  # Reduce output
-                device='cpu'  # Force CPU
+                device=self.device
             )
             detections += detections_batch
         return detections
 
-    def get_object_tracks(self, frames, read_from_stub=False, stub_path=None):
+    def get_object_tracks(self, frames, read_from_stub=False, stub_path=None, cache_key=None):
         """
         Get player tracking results for a sequence of frames with optional caching.
 
@@ -70,7 +68,7 @@ class PlayerTracker:
             list: List of dictionaries containing player tracking information for each frame,
                 where each dictionary maps player IDs to their bounding box coordinates.
         """
-        tracks = read_stub(read_from_stub,stub_path)
+        tracks = read_stub(read_from_stub, stub_path, cache_key=cache_key)
         if tracks is not None:
             if len(tracks) == len(frames):
                 return tracks
@@ -92,12 +90,19 @@ class PlayerTracker:
             tracks.append({})
 
             for frame_detection in detection_with_tracks:
-                bbox = frame_detection[0].tolist()
-                cls_id = frame_detection[3]
-                track_id = frame_detection[4]
+                # Check if frame_detection is valid and has elements
+                if frame_detection is None or len(frame_detection) < 5:
+                    continue
+                
+                try:
+                    bbox = frame_detection[0].tolist()
+                    cls_id = frame_detection[3]
+                    track_id = frame_detection[4]
+                except (IndexError, AttributeError) as e:
+                    continue
 
                 if cls_id == cls_names_inv['Player']:
                     tracks[frame_num][track_id] = {"bbox":bbox}
         
-        save_stub(stub_path,tracks)
+        save_stub(stub_path, tracks, cache_key=cache_key)
         return tracks

@@ -1,195 +1,150 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
+const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 
 function App() {
-  const [youtubeUrl, setYoutubeUrl] = useState('')
-  const [analysisStatus, setAnalysisStatus] = useState(null)
+  const [videoFile, setVideoFile] = useState(null)
   const [jobId, setJobId] = useState(null)
-  const [videoUrl, setVideoUrl] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [job, setJob] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
 
-  const handleAnalyze = async () => {
-    if (!youtubeUrl.trim()) {
-      alert('Please enter a YouTube URL')
-      return
-    }
-
-    setLoading(true)
-    setAnalysisStatus({ status: 'starting', message: 'Starting analysis...' })
+  const analyze = async () => {
+    if (!videoFile) return
+    setSubmitting(true)
+    setJob({ status: 'uploading', message: 'Uploading video' })
+    const body = new FormData()
+    body.append('video', videoFile)
+    body.append('frame_skip', '2')
+    body.append('target_width', '960')
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ video_url: youtubeUrl })
-      })
-
+      const response = await fetch(`${API_BASE_URL}/api/analyze`, { method: 'POST', body })
       const data = await response.json()
-
-      if (data.status === 'success') {
-        setJobId(data.job_id)
-        setAnalysisStatus({ status: 'processing', message: 'Analysis started...' })
-      } else {
-        alert('Error: ' + (data.message || 'Failed to start analysis'))
-        setLoading(false)
-      }
+      if (!response.ok) throw new Error(data.message || 'Unable to start analysis')
+      setJobId(data.job_id)
+      setJob({ status: 'queued', message: 'Analysis queued' })
     } catch (error) {
-      alert('Error starting analysis: ' + error.message)
-      setLoading(false)
-      setAnalysisStatus(null)
+      setSubmitting(false)
+      setJob({ status: 'failed', message: 'Upload failed', error: error.message })
     }
   }
 
   useEffect(() => {
-    if (!jobId) return
-
-    const interval = setInterval(async () => {
+    if (!jobId) return undefined
+    const interval = window.setInterval(async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/api/analysis_status/${jobId}`)
         const data = await response.json()
-
-        setAnalysisStatus({
-          status: data.status,
-          message: data.message || data.status,
-          outputPath: data.output_path,
-          error: data.error
-        })
-
-        if (data.status === 'completed') {
-          setLoading(false)
-          if (data.video_url) {
-            setVideoUrl(`${API_BASE_URL}${data.video_url}`)
-          }
-          clearInterval(interval)
-        } else if (data.status === 'failed') {
-          setLoading(false)
-          clearInterval(interval)
+        setJob(data)
+        if (data.status === 'completed' || data.status === 'failed') {
+          setSubmitting(false)
+          window.clearInterval(interval)
         }
       } catch (error) {
-        console.error('Error checking status:', error)
+        setSubmitting(false)
+        setJob({ status: 'failed', message: 'Status check failed', error: error.message })
+        window.clearInterval(interval)
       }
-    }, 2000)
-
-    return () => clearInterval(interval)
+    }, 1500)
+    return () => window.clearInterval(interval)
   }, [jobId])
 
-  const resetAnalysis = () => {
-    setYoutubeUrl('')
-    setAnalysisStatus(null)
+  const reset = () => {
+    setVideoFile(null)
     setJobId(null)
-    setVideoUrl(null)
-    setLoading(false)
+    setJob(null)
+    setSubmitting(false)
   }
 
+  const metadata = job?.metadata
+
   return (
-    <div className="app">
-      <header className="header">
-        <div className="header-content">
-          <h1>Courtsight</h1>
-          <p className="subtitle">Basketball video analysis with AI-powered insights</p>
-        </div>
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand">CourtSight</div>
+        <span className="scope-label">Detection demo</span>
       </header>
 
-      <main className="main-content">
-        <div className="video-section">
-          <div className="video-container">
-            {videoUrl ? (
-              <video 
-                src={videoUrl} 
-                controls 
-                className="video-player"
-                autoPlay={false}
-              >
-                Your browser does not support the video tag.
-              </video>
+      <main>
+        <section className="intro">
+          <p className="eyebrow">Basketball computer vision</p>
+          <h1>Turn a basketball clip into an annotated video.</h1>
+          <p className="lede">
+            CourtSight detects players, assigns temporary tracking IDs, marks observed basketball
+            detections, and overlays detected court keypoints. It does not claim player identity,
+            possession, scoring, or performance statistics.
+          </p>
+        </section>
+
+        <section className="workspace" aria-label="Video analysis workspace">
+          <div className="viewer">
+            {job?.status === 'completed' && job.video_url ? (
+              <video src={`${API_BASE_URL}${job.video_url}`} controls preload="metadata" />
             ) : (
-              <div className="video-placeholder">
-                <div className="placeholder-content">
-                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="2" y="2" width="20" height="20" rx="2" />
-                    <path d="M10 8l6 4-6 4V8z" />
-                  </svg>
-                  <p>Video preview will appear here after analysis</p>
-                </div>
+              <div className="viewer-empty">
+                <span>Annotated output</span>
+                <p>Your processed video will appear here.</p>
               </div>
             )}
           </div>
-        </div>
 
-        <div className="controls-section">
-          <div className="panel">
-            <h2>Video Analysis</h2>
-            <p className="info-text">
-              Enter a YouTube URL to analyze basketball video for passes, interceptions, and other analytics
+          <div className="control-panel">
+            <h2>Analyze a video</h2>
+            <p className="helper">
+              Use a short MP4, MOV, AVI, MKV, or WebM clip. The demo samples every other frame at
+              up to 960 px and preserves the original playback duration.
             </p>
 
-            <div className="input-group">
+            <label className="file-picker">
+              <span>{videoFile ? videoFile.name : 'Choose video file'}</span>
               <input
-                type="text"
-                value={youtubeUrl}
-                onChange={(e) => setYoutubeUrl(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && !loading && handleAnalyze()}
-                placeholder="https://www.youtube.com/watch?v=..."
-                className="url-input"
-                disabled={loading}
+                type="file"
+                accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm"
+                onChange={(event) => setVideoFile(event.target.files?.[0] || null)}
+                disabled={submitting}
               />
-            </div>
+            </label>
 
-            <div className="button-group">
-              <button
-                onClick={handleAnalyze}
-                disabled={loading || !youtubeUrl.trim()}
-                className="btn btn-primary"
-              >
-                {loading ? (
-                  <>
-                    <span className="spinner"></span>
-                    Analyzing...
-                  </>
-                ) : (
-                  'Analyze Video'
-                )}
+            <div className="actions">
+              <button className="primary" onClick={analyze} disabled={!videoFile || submitting}>
+                {submitting ? 'Processing…' : 'Create annotated video'}
               </button>
-              {analysisStatus && (
-                <button
-                  onClick={resetAnalysis}
-                  className="btn btn-secondary"
-                >
-                  Reset
-                </button>
-              )}
+              {job && <button className="secondary" onClick={reset}>Reset</button>}
             </div>
 
-            {analysisStatus && (
-              <div className="status-panel">
-                <div className="status-item">
-                  <span className="status-label">Status:</span>
-                  <span className={`status-value status-${analysisStatus.status}`}>
-                    {analysisStatus.message || analysisStatus.status}
-                  </span>
-                </div>
-                {analysisStatus.error && (
-                  <div className="status-item error">
-                    <span className="status-label">Error:</span>
-                    <span className="status-value">{analysisStatus.error}</span>
-                  </div>
-                )}
+            {job && (
+              <div className={`status status-${job.status}`} role="status">
+                <strong>{job.message || job.status}</strong>
+                {job.error && <p>{job.error}</p>}
               </div>
             )}
-          </div>
 
-          <div className="info-panel">
-            <h3>How it works</h3>
-            <ul>
-              <li><strong>YouTube URL:</strong> Paste a YouTube video link to analyze basketball gameplay</li>
-              <li><strong>Video Download:</strong> The system automatically downloads the video from YouTube</li>
-              <li><strong>Analysis:</strong> Full analysis includes player tracking, passes, interceptions, and tactical views</li>
-              <li><strong>Results:</strong> Analyzed video with all annotations will be displayed above</li>
-            </ul>
+            {metadata && (
+              <dl className="metadata">
+                <div><dt>Frames</dt><dd>{metadata.frame_count}</dd></div>
+                <div><dt>Output FPS</dt><dd>{metadata.fps?.toFixed(2)}</dd></div>
+                <div><dt>Duration</dt><dd>{metadata.duration_seconds?.toFixed(2)} s</dd></div>
+                <div><dt>Resolution</dt><dd>{metadata.width} × {metadata.height}</dd></div>
+              </dl>
+            )}
           </div>
-        </div>
+        </section>
+
+        <section className="legend" aria-label="Annotation legend">
+          <div><span className="mark player-mark" />Player detection with a temporary track ID</div>
+          <div><span className="mark ball-mark" />Observed ball detection for that frame</div>
+          <div><span className="mark court-mark" />Detected court keypoint</div>
+        </section>
+
+        <section className="limitations">
+          <h2>What this demo does not infer</h2>
+          <p>
+            Track IDs are local to one clip and may change after occlusion. Missing ball detections
+            are left missing rather than interpolated. Team assignment, possession, passes, speed,
+            shots, and score are intentionally outside this demo’s supported scope.
+          </p>
+        </section>
       </main>
     </div>
   )

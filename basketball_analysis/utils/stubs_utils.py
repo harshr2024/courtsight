@@ -8,7 +8,9 @@ which helps avoid redundant computations and speeds up development iterations.
 import os 
 import pickle
 
-def save_stub(stub_path,object):
+CACHE_SCHEMA_VERSION = 2
+
+def save_stub(stub_path, object, cache_key=None):
     """
     Save a Python object to disk at the specified path.
 
@@ -18,14 +20,23 @@ def save_stub(stub_path,object):
         stub_path (str): File path where the object should be saved.
         object: Any Python object that can be pickled.
     """
-    if not os.path.exists(os.path.dirname(stub_path)):
-        os.makedirs(os.path.dirname(stub_path))
+    if stub_path is None:
+        return
+    directory = os.path.dirname(stub_path)
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory)
 
-    if stub_path is not None:
-        with open(stub_path,'wb') as f:
-            pickle.dump(object,f)
+    payload = object
+    if cache_key is not None:
+        payload = {
+            "schema_version": CACHE_SCHEMA_VERSION,
+            "cache_key": cache_key,
+            "data": object,
+        }
+    with open(stub_path, 'wb') as f:
+        pickle.dump(payload, f)
 
-def read_stub(read_from_stub,stub_path):
+def read_stub(read_from_stub, stub_path, cache_key=None):
     """
     Read a previously saved Python object from disk if available.
 
@@ -38,7 +49,14 @@ def read_stub(read_from_stub,stub_path):
     """
     if read_from_stub and stub_path is not None and os.path.exists(stub_path):
         with open(stub_path,'rb') as f:
-            object = pickle.load(f)
-            return object
+            payload = pickle.load(f)
+        if cache_key is None:
+            return payload
+        if not isinstance(payload, dict):
+            return None
+        if payload.get("schema_version") != CACHE_SCHEMA_VERSION:
+            return None
+        if payload.get("cache_key") != cache_key:
+            return None
+        return payload.get("data")
     return None
-    

@@ -214,3 +214,5 @@ For issues:
 - Test API endpoints directly with curl/Postman
 - Check browser console for frontend errors
 
+
+
