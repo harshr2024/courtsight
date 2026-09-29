@@ -38,6 +38,12 @@ class CourtKeypointDrawer:
             annotated_frame = frame.copy()
 
             keypoints = court_keypoints[index]
+            if keypoints is None or not hasattr(keypoints, "xy"):
+                output_frames.append(annotated_frame)
+                continue
+            if keypoints.xy is None or len(keypoints.xy) == 0:
+                output_frames.append(annotated_frame)
+                continue
             # Draw dots
             annotated_frame = vertex_annotator.annotate(
                 scene=annotated_frame,

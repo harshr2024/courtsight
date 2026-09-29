@@ -4,7 +4,11 @@ Quick test script to verify all models can be loaded.
 """
 
 import os
+import sys
+from pathlib import Path
 from ultralytics import YOLO
+
+BASE_DIR = Path(__file__).resolve().parent
 
 def test_model(model_path, model_name):
     """Test if a model can be loaded."""
@@ -28,9 +32,9 @@ if __name__ == '__main__':
     print("Testing model loading...")
     
     models = [
-        ("models/player_detector.pt", "Player Detector"),
-        ("models/ball_detector_model.pt", "Ball Detector"),
-        ("models/court_keypoint_detector.pt", "Court Keypoint Detector")
+        (BASE_DIR / "models/player_detector.pt", "Player Detector"),
+        (BASE_DIR / "models/ball_detector_model.pt", "Ball Detector"),
+        (BASE_DIR / "models/court_keypoint_detector.pt", "Court Keypoint Detector")
     ]
     
     all_ok = True
@@ -42,5 +46,5 @@ if __name__ == '__main__':
         print("\n✓ All models loaded successfully!")
     else:
         print("\n✗ Some models failed to load. Check errors above.")
-
+        sys.exit(1)
 

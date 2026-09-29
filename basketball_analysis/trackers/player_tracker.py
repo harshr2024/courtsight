@@ -55,7 +55,7 @@ class PlayerTracker:
             detections += detections_batch
         return detections
 
-    def get_object_tracks(self, frames, read_from_stub=False, stub_path=None):
+    def get_object_tracks(self, frames, read_from_stub=False, stub_path=None, cache_key=None):
         """
         Get player tracking results for a sequence of frames with optional caching.
 
@@ -68,7 +68,7 @@ class PlayerTracker:
             list: List of dictionaries containing player tracking information for each frame,
                 where each dictionary maps player IDs to their bounding box coordinates.
         """
-        tracks = read_stub(read_from_stub,stub_path)
+        tracks = read_stub(read_from_stub, stub_path, cache_key=cache_key)
         if tracks is not None:
             if len(tracks) == len(frames):
                 return tracks
@@ -104,5 +104,5 @@ class PlayerTracker:
                 if cls_id == cls_names_inv['Player']:
                     tracks[frame_num][track_id] = {"bbox":bbox}
         
-        save_stub(stub_path,tracks)
+        save_stub(stub_path, tracks, cache_key=cache_key)
         return tracks

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-Analyze Recorded Basketball Video
+Analyze a Recorded Basketball Video
 
-This script runs the full basketball analysis on recorded videos from the live detection system.
-It processes the video with all the original analysis features (player tracking, passes, etc.).
+Compatibility wrapper for CourtSight's supported annotation pipeline.
 """
 
 import os
@@ -72,6 +71,8 @@ def main():
     ]
     if args.max_frames:
         sys.argv.extend(['--max_frames', str(args.max_frames)])
+    if args.skip_stubs:
+        sys.argv.append('--no_cache')
     
     try:
         run_full_analysis()
@@ -84,4 +85,4 @@ def main():
         sys.argv = original_argv
 
 if __name__ == '__main__':
-    main() 
+    main()
